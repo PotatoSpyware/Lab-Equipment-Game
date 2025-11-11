@@ -72,13 +72,6 @@ public class Randoimizer : MonoBehaviour
         }
 
         Pick();
-
-        Debug.Log(model);
-        Debug.Log(move1);
-        Debug.Log(move2);
-        Debug.Log(move3);
-        Debug.Log(move4);
-        Debug.Log(bonusHealth);
     }
 
     public void Pick()
