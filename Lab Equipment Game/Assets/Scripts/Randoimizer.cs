@@ -33,14 +33,13 @@ public class Randoimizer : MonoBehaviour
         
     }
 
-    public string Scan()
+    public void Scan()
     {
         while (!Input.GetKeyDown(KeyCode.Return))
         {
             code += Input.inputString;
         }
         Split();
-        return code;
     }
 
     public void Split()
