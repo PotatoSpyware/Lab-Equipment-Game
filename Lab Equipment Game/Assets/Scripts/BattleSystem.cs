@@ -9,69 +9,89 @@ public class BattleSystem : MonoBehaviour
     public UIController ui;
 
     private bool isPlayer1Turn = true;
-    
     private bool isBusy = false;
+    private int turnCount = 0; // counts full rounds
+
+    public Randoimizer p1Randomizer;
+    public Randoimizer p2Randomizer;
 
     void Start()
     {
+        // Assign units using barcode/randomizer
+        p1Randomizer.Split();
+        p2Randomizer.Split();
+
         player1.currentHP = player1.maxHP;
         player2.currentHP = player2.maxHP;
 
         ui.UpdateUI(player1, player2);
-        ui.ShowMoves(player1.moves, OnMoveSelected);
+        ui.ShowMoves(player1.moves, OnMoveSelected, turnCount);
 
-        ui.uiAnimator.PunchTurnBanner(
-            $"{(isPlayer1Turn ? player1.unitName : player2.unitName)}'s Turn"
-        );
-        ui.uiAnimator.playAgainButton.onClick.AddListener(PlayAgain);
+        ui.uiAnimator.PunchTurnBanner($"{(isPlayer1Turn ? player1.unitName : player2.unitName)}'s Turn");
+
+        ui.playAgainButton.onClick.AddListener(PlayAgain);
     }
 
     void OnMoveSelected(int moveIndex)
     {
         if (isBusy) return;
         isBusy = true;
-        
+
         Unit attacker = isPlayer1Turn ? player1 : player2;
         Unit defender = isPlayer1Turn ? player2 : player1;
 
         Move move = attacker.moves[moveIndex];
 
-        // ✅ Run coroutine that handles animation → damage → UI update → turn swap
-        StartCoroutine(AttackFlow(attacker, defender, move));
+        bool hasAdvantage = CheckElementAdvantage(attacker, defender);
+        int finalDamage = move.damage + (hasAdvantage ? 20 : 0);
+
+        // Mark move as used immediately for cooldowns
+        move.lastUsedByPlayerTurn = turnCount;
+
+        // Start attack animation with damage popup on contact
+        StartCoroutine(AttackFlow(attacker, defender, move, finalDamage, hasAdvantage));
     }
 
-    IEnumerator AttackFlow(Unit attacker, Unit defender, Move move)
+    IEnumerator AttackFlow(Unit attacker, Unit defender, Move move, int damage, bool bonus)
     {
-        yield return PlayAttackAnimation(attacker, defender);
+        yield return PlayAttackAnimation(attacker, defender, damage, bonus);
 
-        defender.TakeDamage(move.damage);
-
+        // Apply damage
+        defender.TakeDamage(damage);
         ui.UpdateUI(player1, player2);
 
         // Check win condition
-        // BattleSystem
         if (defender.currentHP <= 0)
         {
             ui.HideMoves();
-            ui.ShowWinner(attacker); // pass the Unit, not a string
+            ui.ShowWinner(attacker);
             yield break;
         }
-
 
         // Switch turn
         isPlayer1Turn = !isPlayer1Turn;
 
-        ui.ShowMoves(isPlayer1Turn ? player1.moves : player2.moves, OnMoveSelected);
+        // Increment turnCount only after both players have moved (full round)
+        if (isPlayer1Turn) turnCount++;
 
-        ui.uiAnimator.PunchTurnBanner(
-            $"{(isPlayer1Turn ? player1.unitName : player2.unitName)}'s Turn"
-        );
+        ui.ShowMoves(isPlayer1Turn ? player1.moves : player2.moves, OnMoveSelected, turnCount);
+        ui.uiAnimator.PunchTurnBanner($"{(isPlayer1Turn ? player1.unitName : player2.unitName)}'s Turn");
 
         isBusy = false;
     }
 
+    private bool CheckElementAdvantage(Unit attacker, Unit defender)
+    {
+        var aType = attacker.modelSelector.selectedType;
+        var dType = defender.modelSelector.selectedType;
 
-    IEnumerator PlayAttackAnimation(Unit attacker, Unit defender)
+        // Reversed advantage
+        return (aType == UnitModelSelector.UnitType.Rock && dType == UnitModelSelector.UnitType.Paper) ||
+               (aType == UnitModelSelector.UnitType.Scissors && dType == UnitModelSelector.UnitType.Rock) ||
+               (aType == UnitModelSelector.UnitType.Paper && dType == UnitModelSelector.UnitType.Scissors);
+    }
+
+    IEnumerator PlayAttackAnimation(Unit attacker, Unit defender, int damage, bool bonus)
     {
         Transform a = attacker.model;
         Transform d = defender.model;
@@ -79,10 +99,8 @@ public class BattleSystem : MonoBehaviour
         Rigidbody attackerRb = attacker.GetComponent<Rigidbody>();
         Rigidbody defenderRb = defender.GetComponent<Rigidbody>();
 
-        if (!attackerRb || !defenderRb)
-            yield break;
+        if (!attackerRb || !defenderRb) yield break;
 
-        // ✅ Freeze defender so it can't launch into space
         defenderRb.isKinematic = true;
 
         Vector3 originalWorldPos = attacker.transform.position;
@@ -90,36 +108,39 @@ public class BattleSystem : MonoBehaviour
 
         attacker.hasCollided = false;
 
-        // --- STEP 1: Wind-up animation (raise model) ---
         float windUp = 0.2f;
         float t = 0f;
 
+        // Wind-up animation
         while (t < windUp)
         {
-            a.localRotation = Quaternion.Euler(Mathf.Lerp(0, 45, t / windUp), 0, 0);  // tilt forward
+            a.localRotation = Quaternion.Euler(Mathf.Lerp(0, 45, t / windUp), 0, 0);
             t += Time.unscaledDeltaTime;
             yield return null;
         }
 
-        // --- STEP 2: Smash (attacker uses physics force) ---
+        // Smash animation
         Vector3 attackDir = (defender.transform.position - attacker.transform.position).normalized;
         attackerRb.AddForce(attackDir * attacker.attackForce, ForceMode.VelocityChange);
 
         float timeout = 0.6f;
         float elapsed = 0f;
 
-        // Wait until attacker collides OR timeout
+        // Wait for collision or timeout
         while (!attacker.hasCollided && elapsed < timeout)
         {
             elapsed += Time.deltaTime;
             yield return null;
         }
 
-        // Stop attacker movement
+        // STOP MOVEMENT
         attackerRb.linearVelocity = Vector3.zero;
         attackerRb.angularVelocity = Vector3.zero;
 
-        // --- STEP 3: Defender shake animation ---
+        // SPAWN DAMAGE POPUP ON CONTACT
+        ui.ShowDamagePopup(defender.transform.position, damage, bonus);
+
+        // Defender shake
         Vector3 defenderStart = d.localPosition;
         float shakeDuration = 0.25f;
         elapsed = 0f;
@@ -132,28 +153,22 @@ public class BattleSystem : MonoBehaviour
         }
         d.localPosition = defenderStart;
 
-        // ✅ Allow defender physics again
         defenderRb.isKinematic = false;
 
-        // --- STEP 4: Return attacker to original position ---
+        // Return attacker to original position
         float returnSpeed = 6f;
         while (Vector3.Distance(attacker.transform.position, originalWorldPos) > 0.01f)
         {
-            attacker.transform.position = Vector3.Lerp(
-                attacker.transform.position,
-                originalWorldPos,
-                Time.deltaTime * returnSpeed
-            );
+            attacker.transform.position = Vector3.Lerp(attacker.transform.position, originalWorldPos, Time.deltaTime * returnSpeed);
             yield return null;
         }
 
         attacker.transform.position = originalWorldPos;
         a.localRotation = originalRot;
     }
-    
+
     public void PlayAgain()
     {
-        // Reload the current scene
-        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex - 1);
     }
 }

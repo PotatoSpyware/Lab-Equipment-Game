@@ -4,6 +4,8 @@ using UnityEngine.Rendering.Universal;
 public class Randoimizer : MonoBehaviour
 {
     [SerializeField] UnitModelSelector selector;
+    
+    public Unit targetUnit;
 
     string code = "156329874562";
 
@@ -15,11 +17,14 @@ public class Randoimizer : MonoBehaviour
     int move4;
 
     int bonusHealth;
+    
+    public bool autoApplyOnStart = true; // for testing
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
-        Split();
+        if (autoApplyOnStart)
+            Split();
     }
 
     // Update is called once per frame
@@ -89,6 +94,17 @@ public class Randoimizer : MonoBehaviour
             selector.selectedType = UnitModelSelector.UnitType.Scissors;
         }
 
+        ApplyMoves();
+    }
+    
+    void ApplyMoves()
+    {
+        targetUnit.moves[0].damage = move1;
+        targetUnit.moves[1].damage = move2;
+        targetUnit.moves[2].damage = move3;
+        targetUnit.moves[3].damage = move4;
 
+        targetUnit.maxHP += bonusHealth;
+        targetUnit.currentHP = targetUnit.maxHP;
     }
 }

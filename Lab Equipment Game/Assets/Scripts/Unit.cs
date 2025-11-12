@@ -12,6 +12,8 @@ public class Unit : MonoBehaviour
 
     [HideInInspector] 
     public bool hasCollided = false;
+    
+    public UnitModelSelector modelSelector;
 
     void Start()
     {
@@ -25,6 +27,14 @@ public class Unit : MonoBehaviour
     void OnCollisionEnter(Collision collision)
     {
         hasCollided = true;
+    }
+    
+    public void ApplyMoveDamageFromBarcode(int[] moveValues)
+    {
+        for (int i = 0; i < moves.Length && i < moveValues.Length; i++)
+        {
+            moves[i].damage = moveValues[i];
+        }
     }
     
     public void TakeDamage(int amount)
