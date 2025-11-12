@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 using UnityEngine.Rendering.Universal;
 
@@ -33,13 +34,15 @@ public class Randoimizer : MonoBehaviour
         
     }
 
-    public void Scan()
+    public IEnumerator Scan()
     {
         while (!Input.GetKeyDown(KeyCode.Return))
         {
             code += Input.inputString;
+            yield return null;
         }
         Split();
+        yield return null;
     }
 
     public void Split()
