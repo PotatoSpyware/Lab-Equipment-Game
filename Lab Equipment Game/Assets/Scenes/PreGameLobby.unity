@@ -1313,7 +1313,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fb7a30c36b7f5e448b6e347d6cc0ab34, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  autoScanForTesting: 1
+  autoScanForTesting: 0
   player1Label: {fileID: 1621844330}
   player2Label: {fileID: 785718596}
   startGameButton: {fileID: 1707495452}
